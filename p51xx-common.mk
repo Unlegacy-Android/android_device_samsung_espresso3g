@@ -35,7 +35,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/init.espresso10.usb.rc:root/init.espresso10.usb.rc \
     $(LOCAL_PATH)/rootdir/init.espresso10.rc:root/init.espresso10.rc \
     $(LOCAL_PATH)/rootdir/ueventd.espresso10.rc:root/ueventd.espresso10.rc \
-    $(LOCAL_PATH)/rootdir/fstab.espresso10:root/fstab.espresso10
+    $(LOCAL_PATH)/rootdir/fstab.espresso10:root/fstab.espresso10 \
+    $(LOCAL_PATH)/rootdir/twrp.fstab:recovery/root/etc/twrp.fstab
 
 # Audio
 PRODUCT_COPY_FILES += \
