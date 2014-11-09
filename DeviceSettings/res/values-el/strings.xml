@@ -15,9 +15,5 @@
      limitations under the License.
  -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-  <string name="app_name">Galaxy Tab 2 Beállítások</string>
-  <string name="category_dock_title">Dokkoló</string>
-  <string name="dockaudio_subcat_title">Dokkoló hangszórók</string>
-  <string name="use_dock_audio_title_head">Dokkoló hangszóróinak használata</string>
-  <string name="use_dock_audio_summary_head">Használja a dokkoló passzív hangkimenetét</string>
+  <string name="app_name">Προηγμένες λειτουργίες</string>
 </resources>
