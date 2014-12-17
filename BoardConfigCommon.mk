@@ -99,6 +99,7 @@ BOARD_SEPOLICY_UNION := \
     file.te \
     device.te \
     domain.te \
+    healthd.te \
     pvrsrvinit.te \
     rild.te \
     wpa_supplicant.te
