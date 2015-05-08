@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+# Use 44.1 kHz UI sounds
+$(call inherit-product-if-exists, frameworks/base/data/sounds/AudioPackage13.mk)
+
 # Inherit device configuration
 $(call inherit-product, device/samsung/p5100/full_p5100.mk)
 
