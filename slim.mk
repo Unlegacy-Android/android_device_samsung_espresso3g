@@ -34,7 +34,7 @@ $(call inherit-product, device/samsung/p5100/full_p5100.mk)
 
 # SlimRoms specific overlay
 DEVICE_PACKAGE_OVERLAYS += device/samsung/p5100/overlay/slim
-DEVICE_PACKAGE_OVERLAYS += device/samsung/p5100/overlay/slim-common
+DEVICE_PACKAGE_OVERLAYS += device/samsung/espresso-common/overlay/slim-common
 
 ## Device identifier. This must come after all inclusions
 PRODUCT_DEVICE := p5100
@@ -49,4 +49,3 @@ PRODUCT_BUILD_PROP_OVERRIDES += \
     TARGET_DEVICE=espresso10rf \
     BUILD_FINGERPRINT="samsung/espresso10rfxx/espresso10rf:4.2.2/JDQ39/P5100XXDNA1:user/release-keys" \
     PRIVATE_BUILD_DESC="espresso10rfxx-user 4.2.2 JDQ39 P5100XXDNA1 release-keys"
-
