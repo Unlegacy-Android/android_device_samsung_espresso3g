@@ -31,6 +31,10 @@ $(call inherit-product, vendor/slim/config/common_full_phone.mk)
 # Inherit device configuration
 $(call inherit-product, device/samsung/p5100/full_p5100.mk)
 
+# SlimRoms specific overlay
+DEVICE_PACKAGE_OVERLAYS += device/samsung/p5100/overlay/slim
+DEVICE_PACKAGE_OVERLAYS += device/samsung/p5100/overlay/slim-common
+
 ## Device identifier. This must come after all inclusions
 PRODUCT_DEVICE := p5100
 PRODUCT_NAME := slim_p5100
