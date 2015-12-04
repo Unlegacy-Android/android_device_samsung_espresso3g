@@ -25,6 +25,7 @@ TARGET_OTA_ASSERT_DEVICE := espresso,p5100,GT-P5100,espresso10rf,espresso10rfxx,
 # RIL
 BOARD_PROVIDES_LIBRIL := true
 BOARD_RIL_CLASS := ../../../device/samsung/espresso3g/ril
+COMMON_GLOBAL_CFLAGS += -DDISABLE_ASHMEM_TRACKING
 
 # Use the non-open-source parts, if they're present
 -include vendor/samsung/espresso3g/BoardConfigVendor.mk
