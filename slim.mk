@@ -15,9 +15,6 @@
 # limitations under the License.
 #
 
-## Specify phone tech before including full_phone
-$(call inherit-product, vendor/slim/config/gsm.mk)
-
 # Release name
 PRODUCT_RELEASE_NAME := p5100
 
@@ -25,27 +22,22 @@ PRODUCT_RELEASE_NAME := p5100
 TARGET_SCREEN_HEIGHT := 800
 TARGET_SCREEN_WIDTH := 1280
 
-# Inherit some common Slim stuff.
+# Inherit common Slim configuration
+$(call inherit-product, vendor/slim/config/gsm.mk)
 $(call inherit-product, vendor/slim/config/common_full_phone.mk)
-
-# Inherit device configuration
-$(call inherit-product, device/samsung/p5100/full_p5100.mk)
 
 # SlimRoms specific overlay
 DEVICE_PACKAGE_OVERLAYS += device/samsung/p5100/overlay/slim
 DEVICE_PACKAGE_OVERLAYS += device/samsung/espresso-common/overlay/slim-common
 
-## Device identifier. This must come after all inclusions
-PRODUCT_DEVICE := p5100
-PRODUCT_NAME := slim_p5100
-PRODUCT_BRAND := samsung
-PRODUCT_MODEL := GT-P5100
-PRODUCT_MANUFACTURER := samsung
+# Inherit device configuration
+$(call inherit-product, device/samsung/p5100/aosp_p5100.mk)
 
-#Set build fingerprint / ID / Prduct Name ect.
+# Device identifier. This must come after all inclusions
+PRODUCT_NAME := slim_p5100
+
+# Set build fingerprint / ID / Product Name etc.
 PRODUCT_BUILD_PROP_OVERRIDES += \
-    PRODUCT_NAME=espresso10rfxx \
-    TARGET_DEVICE=espresso10rf \
     BUILD_FINGERPRINT="samsung/espresso10rfxx/espresso10rf:4.2.2/JDQ39/P5100XXDNA1:user/release-keys" \
     PRIVATE_BUILD_DESC="espresso10rfxx-user 4.2.2 JDQ39 P5100XXDNA1 release-keys"
 
