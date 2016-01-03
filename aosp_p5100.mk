@@ -17,13 +17,18 @@
 # Use 44.1 kHz UI sounds
 $(call inherit-product-if-exists, frameworks/base/data/sounds/AudioPackage13.mk)
 
-# Inherit device configuration
-$(call inherit-product, device/samsung/p5100/full_p5100.mk)
+# Inherit from the common Open Source product configuration
+$(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 
-# Device identifier. This must come after all inclusions
+# Inherit device specific configuration
+$(call inherit-product, device/samsung/p5100/device.mk)
+
+PRODUCT_DEVICE := p5100
 PRODUCT_NAME := aosp_p5100
+PRODUCT_BRAND := Android
+PRODUCT_MODEL := GT-P5100
+PRODUCT_MANUFACTURER := Samsung
 
-# Set Product Name etc.
 PRODUCT_BUILD_PROP_OVERRIDES += \
     PRODUCT_NAME=espresso10rfxx \
     TARGET_DEVICE=espresso10rf
