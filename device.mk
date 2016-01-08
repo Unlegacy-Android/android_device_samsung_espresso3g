@@ -19,16 +19,12 @@ $(call inherit-product, device/samsung/espresso-common/espresso-common.mk)
 
 LOCAL_PATH := device/samsung/p5100
 
-DEVICE_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/aosp
+DEVICE_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
 # Audio
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/tiny_hw.xml:system/etc/sound/espresso10rf \
     $(LOCAL_PATH)/configs/audio_policy.conf:system/etc/audio_policy.conf
-
-# Packages
-PRODUCT_PACKAGES += \
-    SamsungServiceMode
 
 # RIL
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -41,5 +37,4 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.software.sip.voip.xml:system/etc/permissions/android.software.sip.voip.xml
 
 # Use the non-open-source parts, if they're present
-$(call inherit-product-if-exists, vendor/samsung/p51xx/p5100-vendor.mk)
 $(call inherit-product-if-exists, vendor/samsung/p51xx/p51xx-vendor.mk)
