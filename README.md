@@ -1,2 +1,2 @@
-android_device_samsung_p5100
+android_device_samsung_espresso3g
 ============================
