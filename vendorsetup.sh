@@ -1,1 +1,1 @@
-add_lunch_combo aosp_p5100-userdebug
+add_lunch_combo aosp_espresso3g-userdebug
