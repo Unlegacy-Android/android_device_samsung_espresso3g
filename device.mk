@@ -21,9 +21,11 @@ LOCAL_PATH := device/samsung/espresso3g
 
 DEVICE_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
-# Audio
+# Audio configs
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/audio_policy.conf:system/etc/audio_policy.conf
+    $(LOCAL_PATH)/audio/audio_policy.conf:system/etc/audio_policy.conf \
+    $(LOCAL_PATH)/audio/tiny_hw_espresso.xml:system/etc/sound/espresso \
+    $(LOCAL_PATH)/audio/tiny_hw_espresso10.xml:system/etc/sound/espresso10
 
 # RIL
 PRODUCT_PACKAGES += \
