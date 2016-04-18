@@ -27,5 +27,9 @@ BOARD_PROVIDES_LIBRIL := true
 BOARD_RIL_CLASS := ../../../device/samsung/espresso3g/ril
 COMMON_GLOBAL_CFLAGS += -DDISABLE_ASHMEM_TRACKING
 
+# Selinux
+BOARD_SEPOLICY_DIRS += \
+    device/samsung/espresso3g/sepolicy
+
 # Use the non-open-source parts, if they're present
 -include vendor/samsung/espresso3g/BoardConfigVendor.mk
