@@ -19,6 +19,7 @@ $(call inherit-product, device/samsung/espresso/device-common.mk)
 
 LOCAL_PATH := device/samsung/espresso3g
 
+# Include 3g overlays
 DEVICE_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
 # Audio configs
@@ -29,8 +30,8 @@ PRODUCT_COPY_FILES += \
 
 # RIL
 PRODUCT_PACKAGES += \
-	libsecril-client \
-	libsecril-compat
+    libsecril-client \
+    libsecril-compat
 
 PRODUCT_PROPERTY_OVERRIDES += \
     mobiledata.interfaces=pdp0,wlan0,gprs,ppp0 \
