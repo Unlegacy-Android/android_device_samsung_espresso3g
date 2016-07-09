@@ -26,7 +26,6 @@ TARGET_OTA_ASSERT_DEVICE := espresso3g,espresso-common,p3100,GT-P3100,espressorf
 BOARD_PROVIDES_LIBRIL := true
 BOARD_RIL_CLASS := ../../../device/samsung/espresso3g/ril
 
-
 # SELinux
 BOARD_SEPOLICY_DIRS += \
     device/samsung/espresso3g/sepolicy
@@ -37,6 +36,3 @@ BOARD_SEPOLICY_UNION += \
     file.te \
     file_contexts \
     rild.te
-
-# Use the non-open-source parts, if they're present
--include vendor/samsung/espresso3g/BoardConfigVendor.mk

@@ -15,10 +15,11 @@
 #
 
 # Include espresso-common makefile
-$(call inherit-product, device/samsung/espresso/espresso-common.mk)
+$(call inherit-product, device/samsung/espresso/device-common.mk)
 
 LOCAL_PATH := device/samsung/espresso3g
 
+# Include 3g overlays
 DEVICE_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/aosp
 
 # Audio configs
@@ -26,10 +27,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_policy.conf:system/etc/audio_policy.conf \
     $(LOCAL_PATH)/audio/tiny_hw_espresso.xml:system/etc/sound/espresso \
     $(LOCAL_PATH)/audio/tiny_hw_espresso10.xml:system/etc/sound/espresso10
-
-# Packages
-PRODUCT_PACKAGES += \
-    SamsungServiceMode
 
 # RIL
 PRODUCT_PACKAGES += \
