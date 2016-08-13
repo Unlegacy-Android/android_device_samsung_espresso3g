@@ -25,4 +25,3 @@ TARGET_OTA_ASSERT_DEVICE := espresso3g,p3100,GT-P3100,espressorf,espressorfxx,p5
 # RIL
 BOARD_PROVIDES_LIBRIL := true
 BOARD_RIL_CLASS := ../../../device/samsung/espresso3g/ril
-
