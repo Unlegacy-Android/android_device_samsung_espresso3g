@@ -14,6 +14,10 @@
 # limitations under the License.
 #
 
+# Get the long list of APNs
+PRODUCT_COPY_FILES += \
+    device/sample/etc/apns-full-conf.xml:system/etc/apns-conf.xml
+
 # Use 44.1 kHz UI sounds
 $(call inherit-product-if-exists, frameworks/base/data/sounds/AudioPackage13.mk)
 
