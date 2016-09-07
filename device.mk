@@ -31,7 +31,8 @@ PRODUCT_COPY_FILES += \
 # RIL
 PRODUCT_PACKAGES += \
     libsecril-client \
-    libsecril-compat
+    libsecril-compat \
+    libsecril-shim
 
 PRODUCT_PROPERTY_OVERRIDES += \
     mobiledata.interfaces=pdp0,wlan0,gprs,ppp0 \
