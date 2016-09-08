@@ -9,7 +9,8 @@ LOCAL_SRC_FILES := \
 LOCAL_SHARED_LIBRARIES := \
 	liblog \
 	libril \
-	libcutils
+	libcutils \
+	libbinder
 
 LOCAL_CFLAGS := -Wall -Werror
 
