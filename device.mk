@@ -32,7 +32,8 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     libsecril-client \
     libsecril-compat \
-    libsecril-shim
+    libsecril-shim \
+    libsecnativefeature
 
 PRODUCT_PROPERTY_OVERRIDES += \
     mobiledata.interfaces=pdp0,wlan0,gprs,ppp0
