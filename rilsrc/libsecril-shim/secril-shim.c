@@ -43,6 +43,28 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 	origRilFunctions->onRequest(request, data, datalen, t);
 }
 
+static void onCompleteRequestGetSimStatus(RIL_Token t, RIL_Errno e, void *response, size_t responselen) {
+	/* While at it, upgrade the response to RIL_CardStatus_v6 */
+	RIL_CardStatus_v5_samsung *p_cur = ((RIL_CardStatus_v5_samsung *) response);
+	RIL_CardStatus_v6 *v6response = malloc(sizeof(RIL_CardStatus_v6));
+
+	v6response->card_state = p_cur->card_state;
+	v6response->universal_pin_state = p_cur->universal_pin_state;
+	v6response->gsm_umts_subscription_app_index = p_cur->gsm_umts_subscription_app_index;
+	v6response->cdma_subscription_app_index = p_cur->cdma_subscription_app_index;
+	v6response->ims_subscription_app_index = -1;
+	v6response->num_applications = p_cur->num_applications;
+
+	int i;
+	for (i = 0; i < RIL_CARD_MAX_APPS; ++i)
+		memcpy(&v6response->applications[i], &p_cur->applications[i], sizeof(RIL_AppStatus));
+
+	/* Send the fixed response to libril */
+	rilEnv->OnRequestComplete(t, e, v6response, sizeof(RIL_CardStatus_v6));
+
+	free(v6response);
+}
+
 static void onCompleteQueryAvailableNetworks(RIL_Token t, RIL_Errno e, void *response, size_t responselen) {
 	/* Response is a char **, pointing to an array of char *'s */
 	size_t numStrings = responselen / sizeof(char *);
@@ -81,6 +103,13 @@ static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size
 	request = pRI->pCI->requestNumber;
 
 	switch (request) {
+		case RIL_REQUEST_GET_SIM_STATUS:
+			/* Remove unused extra elements from RIL_AppStatus */
+			if (response != NULL && responselen == sizeof(RIL_CardStatus_v5_samsung)) {
+				onCompleteRequestGetSimStatus(t, e, response, responselen);
+				return;
+			}
+			break;
 		case RIL_REQUEST_QUERY_AVAILABLE_NETWORKS:
 			/* Remove the extra (unused) element from the operator info, freaking out the framework.
 			 * Formerly, this is know as the mQANElements override. */
