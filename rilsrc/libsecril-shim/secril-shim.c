@@ -6,7 +6,7 @@ static const RIL_RadioFunctions *origRilFunctions;
 /* A copy of the ril environment passed to RIL_Init. */
 static const struct RIL_Env *rilEnv;
 
-static void onRequestDial(int request, void *data, size_t datalen, RIL_Token t) {
+static void onRequestDial(int request, void *data, RIL_Token t) {
 	RIL_Dial dial;
 	RIL_UUS_Info uusInfo;
 
@@ -31,7 +31,7 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 		/* The Samsung RIL crashes if uusInfo is NULL... */
 		case RIL_REQUEST_DIAL:
 			if (datalen == sizeof(RIL_Dial) && data != NULL) {
-				onRequestDial(request, data, datalen, t);
+				onRequestDial(request, data, t);
 				return;
 			}
 			break;
@@ -83,7 +83,7 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 	origRilFunctions->onRequest(request, data, datalen, t);
 }
 
-static void onCompleteRequestGetSimStatus(RIL_Token t, RIL_Errno e, void *response, size_t responselen) {
+static void onCompleteRequestGetSimStatus(RIL_Token t, RIL_Errno e, void *response) {
 	/* While at it, upgrade the response to RIL_CardStatus_v6 */
 	RIL_CardStatus_v5_samsung *p_cur = ((RIL_CardStatus_v5_samsung *) response);
 	RIL_CardStatus_v6 v6response;
@@ -136,7 +136,7 @@ static void onCompleteQueryAvailableNetworks(RIL_Token t, RIL_Errno e, void *res
 	free(newResponse);
 }
 
-static void fixupSignalStrength(void *response, size_t responselen) {
+static void fixupSignalStrength(void *response) {
 	int gsmSignalStrength;
 
 	RIL_SignalStrength_v10 *p_cur = ((RIL_SignalStrength_v10 *) response);
@@ -174,7 +174,7 @@ static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size
 		case RIL_REQUEST_GET_SIM_STATUS:
 			/* Remove unused extra elements from RIL_AppStatus */
 			if (response != NULL && responselen == sizeof(RIL_CardStatus_v5_samsung)) {
-				onCompleteRequestGetSimStatus(t, e, response, responselen);
+				onCompleteRequestGetSimStatus(t, e, response);
 				return;
 			}
 			break;
@@ -199,7 +199,7 @@ static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size
 		case RIL_REQUEST_SIGNAL_STRENGTH:
 			/* The Samsung RIL reports the signal strength in a strange way... */
 			if (response != NULL && responselen >= sizeof(RIL_SignalStrength_v5)) {
-				fixupSignalStrength(response, responselen);
+				fixupSignalStrength(response);
 				rilEnv->OnRequestComplete(t, e, response, responselen);
 				return;
 			}
@@ -223,7 +223,7 @@ static void onUnsolicitedResponseShim(int unsolResponse, const void *data, size_
 		case RIL_UNSOL_SIGNAL_STRENGTH:
 			/* The Samsung RIL reports the signal strength in a strange way... */
 			if (data != NULL && datalen >= sizeof(RIL_SignalStrength_v5))
-				fixupSignalStrength((void*) data, datalen);
+				fixupSignalStrength((void*) data);
 			break;
 	}
 
