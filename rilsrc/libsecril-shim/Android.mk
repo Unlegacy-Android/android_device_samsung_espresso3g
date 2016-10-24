@@ -7,6 +7,7 @@ LOCAL_SRC_FILES := \
 	secril-shim.c
 
 LOCAL_SHARED_LIBRARIES := \
+	libdl \
 	liblog \
 	libril \
 	libcutils
