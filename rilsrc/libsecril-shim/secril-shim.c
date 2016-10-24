@@ -8,53 +8,6 @@ static const struct RIL_Env *rilEnv;
 
 static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 {
-	switch (request) {
-		/* Necessary; RILJ may fake this for us if we reply not supported, but we can just implement it. */
-		case RIL_REQUEST_GET_RADIO_CAPABILITY:
-			; /* lol C standard */
-			RIL_RadioCapability rc[1] =
-			{
-				{ /* rc[0] */
-					RIL_RADIO_CAPABILITY_VERSION, /* version */
-					0, /* session */
-					RC_PHASE_CONFIGURED, /* phase */
-					RAF_GSM | RAF_GPRS | RAF_EDGE | RAF_HSUPA | RAF_HSDPA | RAF_HSPA | RAF_HSPAP | RAF_UMTS, /* rat */
-					{ /* logicalModemUuid */
-						0,
-					},
-					RC_STATUS_SUCCESS /* status */
-				}
-			};
-			RLOGW("%s: got request %s: replied with our implementation!\n", __func__, requestToString(request));
-			rilEnv->OnRequestComplete(t, RIL_E_SUCCESS, rc, sizeof(rc));
-			return;
-
-		/* The following requests were introduced post-4.3. */
-		case RIL_REQUEST_SIM_TRANSMIT_APDU_BASIC:
-		case RIL_REQUEST_SIM_OPEN_CHANNEL: /* !!! */
-		case RIL_REQUEST_SIM_CLOSE_CHANNEL:
-		case RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL:
-		case RIL_REQUEST_NV_READ_ITEM:
-		case RIL_REQUEST_NV_WRITE_ITEM:
-		case RIL_REQUEST_NV_WRITE_CDMA_PRL:
-		case RIL_REQUEST_NV_RESET_CONFIG:
-		case RIL_REQUEST_SET_UICC_SUBSCRIPTION:
-		case RIL_REQUEST_ALLOW_DATA:
-		case RIL_REQUEST_GET_HARDWARE_CONFIG:
-		case RIL_REQUEST_SIM_AUTHENTICATION:
-		case RIL_REQUEST_GET_DC_RT_INFO:
-		case RIL_REQUEST_SET_DC_RT_INFO_RATE:
-		case RIL_REQUEST_SET_DATA_PROFILE:
-		case RIL_REQUEST_SHUTDOWN: /* TODO: Is there something we can do for RIL_REQUEST_SHUTDOWN ? */
-		case RIL_REQUEST_SET_RADIO_CAPABILITY:
-		case RIL_REQUEST_START_LCE:
-		case RIL_REQUEST_STOP_LCE:
-		case RIL_REQUEST_PULL_LCEDATA:
-			RLOGW("%s: got request %s: replied with REQUEST_NOT_SUPPPORTED.\n", __func__, requestToString(request));
-			rilEnv->OnRequestComplete(t, RIL_E_REQUEST_NOT_SUPPORTED, NULL, 0);
-			return;
-	}
-
 	RLOGD("%s: got request %s: forwarded to RIL.\n", __func__, requestToString(request));
 	origRilFunctions->onRequest(request, data, datalen, t);
 }
