@@ -47,9 +47,6 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 		case RIL_REQUEST_SET_DATA_PROFILE:
 		case RIL_REQUEST_SHUTDOWN: /* TODO: Is there something we can do for RIL_REQUEST_SHUTDOWN ? */
 		case RIL_REQUEST_SET_RADIO_CAPABILITY:
-		case RIL_REQUEST_START_LCE:
-		case RIL_REQUEST_STOP_LCE:
-		case RIL_REQUEST_PULL_LCEDATA:
 			RLOGW("%s: got request %s: replied with REQUEST_NOT_SUPPPORTED.\n", __func__, requestToString(request));
 			rilEnv->OnRequestComplete(t, RIL_E_REQUEST_NOT_SUPPORTED, NULL, 0);
 			return;
