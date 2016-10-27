@@ -1,3 +1,5 @@
+#define LOG_TAG "secril-shim"
+
 #include "secril-shim.h"
 
 /* A copy of the original RIL function table. */
@@ -12,13 +14,19 @@ static void onRequestDial(int request, void *data, size_t datalen, RIL_Token t) 
 
 	memcpy(dial, data, datalen);
 
+	ALOGE("onRequestDial: dial->address = %s", dial->address);
+	ALOGE("onRequestDial: dial->clir = %d", dial->clir);
+
 	if (dial->uusInfo == NULL) {
+		ALOGE("onRequestDial: dial->uusInfo = NULL");
 		memset(uusInfo, 0, sizeof(RIL_UUS_Info));
 		uusInfo->uusType = (RIL_UUS_Type) 0;
 		uusInfo->uusDcs = (RIL_UUS_DCS) 0;
 		uusInfo->uusData = NULL;
 		uusInfo->uusLength = 0;
 		dial->uusInfo = uusInfo;
+	} else {
+		ALOGE("onRequestDial: dial->uusInfo != NULL");
 	}
 
 	origRilFunctions->onRequest(request, dial, sizeof(RIL_Dial), t);
@@ -32,8 +40,11 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 	switch (request) {
 		/* The Samsung RIL crashes if uusInfo is NULL... */
 		case RIL_REQUEST_DIAL:
+			ALOGE("RIL_REQUEST_DIAL...");
 			if (datalen == sizeof(RIL_Dial) && data != NULL) {
+				ALOGE("Fixing RIL_REQUEST_DIAL");
 				onRequestDial(request, data, datalen, t);
+				ALOGE("Fixed RIL_REQUEST_DIAL");
 				return;
 			}
 			break;
