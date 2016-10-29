@@ -10,5 +10,8 @@
 /dev/umts_router                            u:object_r:radio_device:s0
 /dev/__cbd_msg_                             u:object_r:cbd_device:s0
 
+# Radio Data
+/data/misc/radio(/.*)?                      u:object_r:radio_data:s0
+
 # Block devices
 /dev/block/platform/omap/omap_hsmmc.1/by-name/MODEM    u:object_r:radio_device:s0
