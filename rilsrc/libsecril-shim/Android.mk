@@ -14,6 +14,8 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_CFLAGS := -Wall -Werror
 
+LOCAL_CLANG := true
+
 LOCAL_MODULE := libsecril-shim
 
 include $(BUILD_SHARED_LIBRARY)
