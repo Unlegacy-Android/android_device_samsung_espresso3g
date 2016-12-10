@@ -6,7 +6,7 @@ static const RIL_RadioFunctions *origRilFunctions;
 /* A copy of the ril environment passed to RIL_Init. */
 static const struct RIL_Env *rilEnv;
 
-static void onRequestDial(int request, void *data, size_t datalen, RIL_Token t) {
+static void onRequestDial(int request, void *data, size_t datalen __unused, RIL_Token t) {
 	RIL_Dial dial;
 	RIL_UUS_Info uusInfo;
 
