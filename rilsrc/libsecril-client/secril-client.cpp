@@ -33,7 +33,6 @@ namespace android {
 //---------------------------------------------------------------------------
 // Defines
 //---------------------------------------------------------------------------
-#define DBG 1
 #define RILD_PORT               7777
 #define MULTI_CLIENT_SOCKET_NAME "Multiclient"
 #define MULTI_CLIENT_Q_SOCKET_NAME "QMulticlient"
@@ -910,7 +909,7 @@ int SetTwoMicControl(HRilClient client, TwoMicSolDevice device, TwoMicSolReport 
     int ret;
     char data[6] = {0,};
 
-    RLOGE(" + %s", __FUNCTION__);
+    RLOGV(" + %s", __FUNCTION__);
 
     if (client == NULL || client->prv == NULL) {
         RLOGE("%s: Invalid client %p", __FUNCTION__, client);
@@ -944,7 +943,7 @@ int SetTwoMicControl(HRilClient client, TwoMicSolDevice device, TwoMicSolReport 
         RegisterRequestCompleteHandler(client, REQ_SET_TWO_MIC_CTRL, NULL);
     }
 
-    RLOGE(" - %s", __FUNCTION__);
+    RLOGV(" - %s", __FUNCTION__);
 
     return ret;
 }
@@ -1092,7 +1091,7 @@ static int SendOemRequestHookRaw(HRilClient client, int req_id, char *data, size
     // DO TX: header(size).
     header = htonl(p.dataSize());
 
-    if (DBG) RLOGD("%s(): token = %d\n", __FUNCTION__, token);
+    RLOGV("%s(): token = %d\n", __FUNCTION__, token);
 
     ret = blockingWrite(client_prv->sock, (void *)&header, sizeof(header));
     if (ret < 0) {
@@ -1211,7 +1210,7 @@ static void * RxReaderFunc(void *param) {
         FD_SET(client_prv->sock, &(client_prv->sock_rfds));
         FD_SET(client_prv->pipefd[0], &(client_prv->sock_rfds));
 
-        if (DBG) RLOGD("[*] %s() b_connect=%d\n", __FUNCTION__, client_prv->b_connect);
+        RLOGV("[*] %s() b_connect=%d\n", __FUNCTION__, client_prv->b_connect);
         if (select(maxfd, &(client_prv->sock_rfds), NULL, NULL, NULL) > 0) {
             if (FD_ISSET(client_prv->sock, &(client_prv->sock_rfds))) {
                 // Read incoming data
@@ -1258,7 +1257,7 @@ static void * RxReaderFunc(void *param) {
             if (FD_ISSET(client_prv->pipefd[0], &(client_prv->sock_rfds))) {
                 char end_cmd[10];
 
-                if (DBG) RLOGD("%s(): close\n", __FUNCTION__);
+                RLOGV("%s(): close\n", __FUNCTION__);
 
                 if (read(client_prv->pipefd[0], end_cmd, sizeof(end_cmd)) > 0) {
                     close(client_prv->sock);
@@ -1317,7 +1316,7 @@ static int processSolicited(RilClientPrv *prv, Parcel &p) {
     int ret = RIL_CLIENT_ERR_SUCCESS;
     uint32_t req_id = 0;
 
-    if (DBG) RLOGD("%s()", __FUNCTION__);
+    RLOGV("%s()", __FUNCTION__);
 
     status = p.readInt32(&token);
     if (status != NO_ERROR) {
@@ -1362,7 +1361,7 @@ static int processSolicited(RilClientPrv *prv, Parcel &p) {
     req_func = FindReqHandler(prv, token, &req_id);
     if (req_func)
     {
-        if (DBG) RLOGD("[*] Call handler");
+        RLOGV("[*] Call handler");
         req_func(prv->parent, data, len);
 
         if(prv->b_del_handler) {
@@ -1370,7 +1369,7 @@ static int processSolicited(RilClientPrv *prv, Parcel &p) {
             RegisterRequestCompleteHandler(prv->parent, req_id, NULL);
         }
     } else {
-        if (DBG) RLOGD("%s: No handler for token %d\n", __FUNCTION__, token);
+        RLOGV("%s: No handler for token %d\n", __FUNCTION__, token);
     }
 
 error:
@@ -1391,7 +1390,7 @@ static int processRxBuffer(RilClientPrv *prv, void *buffer, size_t buflen) {
     p.setData((uint8_t *)buffer, buflen);
 
     status = p.readInt32(&response_type);
-    if (DBG) RLOGD("%s: status %d response_type %d", __FUNCTION__, status, response_type);
+    RLOGV("%s: status %d response_type %d", __FUNCTION__, status, response_type);
 
     if (status != NO_ERROR) {
      ret = RIL_CLIENT_ERR_IO;
@@ -1458,13 +1457,13 @@ static uint8_t IsValidToken(uint32_t *token_pool, uint32_t token) {
 static int RecordReqHistory(RilClientPrv *prv, int token, uint32_t id) {
     int i = 0;
 
-    if (DBG) RLOGD("[*] %s(): token(%d), ID(%d)\n", __FUNCTION__, token, id);
+    RLOGV("[*] %s(): token(%d), ID(%d)\n", __FUNCTION__, token, id);
     for (i = 0; i < TOKEN_POOL_SIZE; i++) {
         if (prv->history[i].token == 0) {
             prv->history[i].token = token;
             prv->history[i].id = id;
 
-            if (DBG) RLOGD("[*] %s(): token(%d), ID(%d)\n", __FUNCTION__, token, id);
+            RLOGV("[*] %s(): token(%d), ID(%d)\n", __FUNCTION__, token, id);
 
             return RIL_CLIENT_ERR_SUCCESS;
         }
@@ -1478,7 +1477,7 @@ static int RecordReqHistory(RilClientPrv *prv, int token, uint32_t id) {
 static void ClearReqHistory(RilClientPrv *prv, int token) {
     int i = 0;
 
-    if (DBG) RLOGD("[*] %s(): token(%d)\n", __FUNCTION__, token);
+    RLOGV("[*] %s(): token(%d)\n", __FUNCTION__, token);
     for (i = 0; i < TOKEN_POOL_SIZE; i++) {
         if (prv->history[i].token == token) {
             memset(&(prv->history[i]), 0, sizeof(ReqHistory));
@@ -1505,7 +1504,7 @@ static RilOnComplete FindReqHandler(RilClientPrv *prv, int token, uint32_t *id) 
     int i = 0;
     int j = 0;
 
-    if (DBG) RLOGD("[*] %s(): token(%d)\n", __FUNCTION__, token);
+    RLOGV("[*] %s(): token(%d)\n", __FUNCTION__, token);
 
     // Search request history.
     for (i = 0; i < TOKEN_POOL_SIZE; i++) {
