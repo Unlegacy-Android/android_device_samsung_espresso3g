@@ -1,4 +1,6 @@
-permissive cpboot-daemon;
+userdebug_or_eng(`
+  permissive cpboot-daemon;
+')
 
 allow cpboot-daemon cbd_device:chr_file create_file_perms;
 allow cpboot-daemon cgroup:dir create_dir_perms;
