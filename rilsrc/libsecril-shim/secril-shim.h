@@ -19,7 +19,7 @@
 
 #define RIL_LIB_PATH "/vendor/lib/libsec-ril.so"
 
-extern const char * requestToString(int request);
+extern "C" const char * requestToString(int request);
 
 typedef struct
 {

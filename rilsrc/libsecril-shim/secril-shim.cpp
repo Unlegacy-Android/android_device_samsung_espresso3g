@@ -37,7 +37,7 @@ static void onRequestShim(int request, void *data, size_t datalen, RIL_Token t)
 			break;
 	}
 
-	RLOGD("%s: got request %s: forwarded to RIL.\n", __func__, requestToString(request));
+	RLOGD("%s: got request %s: forwarded to RIL.\n", __FUNCTION__, requestToString(request));
 	origRilFunctions->onRequest(request, data, datalen, t);
 }
 
@@ -163,8 +163,8 @@ static void onRequestCompleteShim(RIL_Token t, RIL_Errno e, void *response, size
 			}
 			break;
 	}
+	RLOGD("%s: got request %s: forwarded to libril.\n", __FUNCTION__, requestToString(request));
 
-	RLOGD("%s: got request %s: forwarded to libril.\n", __func__, requestToString(request));
 null_token_exit:
 	rilEnv->OnRequestComplete(t, e, response, responselen);
 }
@@ -203,21 +203,21 @@ const RIL_RadioFunctions* RIL_Init(const struct RIL_Env *env, int argc, char **a
 
 	/* Open and Init the original RIL. */
 
-	origRil = dlopen(RIL_LIB_PATH, RTLD_LOCAL);
+	origRil = dlopen(RIL_LIB_PATH, RTLD_GLOBAL);
 	if (CC_UNLIKELY(!origRil)) {
-		RLOGE("%s: failed to load '" RIL_LIB_PATH  "': %s\n", __func__, dlerror());
+		RLOGE("%s: failed to load '" RIL_LIB_PATH  "': %s\n", __FUNCTION__, dlerror());
 		return NULL;
 	}
 
-	origRilInit = dlsym(origRil, "RIL_Init");
+	origRilInit = (const RIL_RadioFunctions *(*)(const struct RIL_Env *, int, char **))(dlsym(origRil, "RIL_Init"));
 	if (CC_UNLIKELY(!origRilInit)) {
-		RLOGE("%s: couldn't find original RIL_Init!\n", __func__);
+		RLOGE("%s: couldn't find original RIL_Init!\n", __FUNCTION__);
 		goto fail_after_dlopen;
 	}
 
 	origRilFunctions = origRilInit(&shimmedEnv, argc, argv);
 	if (CC_UNLIKELY(!origRilFunctions)) {
-		RLOGE("%s: the original RIL_Init derped.\n", __func__);
+		RLOGE("%s: the original RIL_Init derped.\n", __FUNCTION__);
 		goto fail_after_dlopen;
 	}
 
