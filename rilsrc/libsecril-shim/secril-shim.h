@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <binder/Parcel.h>
 #include <cutils/compiler.h>
 #include <cutils/properties.h>
 #include <sys/cdefs.h>
@@ -54,8 +53,8 @@ typedef struct
 /* TODO: Do we really need to redefine these? They aren't in a header... */
 typedef struct {
     int requestNumber;
-    void (*dispatchFunction) (android::Parcel &p, struct RequestInfo *pRI);
-    int(*responseFunction) (android::Parcel &p, void *response, size_t responselen);
+    void (*dispatchFunction) (void *p, void *pRI);
+    int(*responseFunction) (void *p, void *response, size_t responselen);
 } CommandInfo;
 
 typedef struct RequestInfo {
