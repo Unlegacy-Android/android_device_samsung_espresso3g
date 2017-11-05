@@ -32,3 +32,6 @@ PRODUCT_DEVICE := espresso3g
 PRODUCT_BRAND := Android
 PRODUCT_MODEL := Galaxy Tab 2 3G
 PRODUCT_MANUFACTURER := Samsung
+
+PRODUCT_PACKAGES += \
+    Stk
