@@ -168,6 +168,9 @@ extern "C" const char * rilSocketIdToString(RIL_SOCKET_ID socket_id);
 
 extern "C"
 char rild[MAX_SOCKET_NAME_LENGTH] = SOCKET_NAME_RIL;
+
+#define RIL_VENDOR_COMMANDS_OFFSET 10000
+
 /*******************************************************************/
 
 RIL_RadioFunctions s_callbacks = {0, NULL, NULL, NULL, NULL, NULL};
@@ -362,6 +365,14 @@ static UnsolResponseInfo s_unsolResponses[] = {
 #include "ril_unsol_commands.h"
 };
 
+static CommandInfo s_commands_v[] = {
+#include <telephony/ril_commands_vendor.h>
+};
+
+static UnsolResponseInfo s_unsolResponses_v[] = {
+#include <telephony/ril_unsol_commands_vendor.h>
+};
+
 /* For older RILs that do not support new commands RIL_REQUEST_VOICE_RADIO_TECH and
    RIL_UNSOL_VOICE_RADIO_TECH_CHANGED messages, decode the voice radio tech from
    radio state message and store it. Every time there is a change in Radio State
@@ -476,6 +487,11 @@ issueLocalRequest(int request, void *data, int len, RIL_SOCKET_ID socket_id) {
     pRI->pCI = &(s_commands[request]);
     pRI->socket_id = socket_id;
 
+    /* Hack to include Samsung requests */
+    if (request > RIL_VENDOR_COMMANDS_OFFSET) {
+        pRI->pCI = &(s_commands_v[request - RIL_VENDOR_COMMANDS_OFFSET]);
+    }
+
     ret = pthread_mutex_lock(pendingRequestsMutexHook);
     assert (ret == 0);
 
@@ -536,6 +552,18 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
         return 0;
     }
 
+    CommandInfo *pCI = NULL;
+    if (request > RIL_VENDOR_COMMANDS_OFFSET) {
+        int index = request - RIL_VENDOR_COMMANDS_OFFSET;
+        RLOGD("processCommandBuffer: samsung request=%d, index=%d",
+                request, index);
+        if (index < (int32_t)NUM_ELEMS(s_commands_v))
+            pCI = &(s_commands_v[index]);
+    } else {
+        if (request < (int32_t)NUM_ELEMS(s_commands))
+            pCI = &(s_commands[request]);
+    }
+
     // Received an Ack for the previous result sent to RIL.java,
     // so release wakelock and exit
     if (request == RIL_RESPONSE_ACKNOWLEDGEMENT) {
@@ -543,7 +571,7 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
         return 0;
     }
 
-    if (request < 1 || request >= (int32_t)NUM_ELEMS(s_commands)) {
+    if (pCI == NULL) {
         Parcel pErr;
         RLOGE("unsupported request code %d token %d", request, token);
         // FIXME this should perhaps return a response
@@ -562,7 +590,7 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
     }
 
     pRI->token = token;
-    pRI->pCI = &(s_commands[request]);
+    pRI->pCI = pCI;
     pRI->socket_id = socket_id;
 
     ret = pthread_mutex_lock(pendingRequestsMutexHook);
@@ -2371,6 +2399,8 @@ responseInts(Parcel &p, void *response, size_t responselen) {
 // Currently, only Shamu plans to use RIL_LastCallFailCauseInfo.
 // TODO(yjl): Let all implementations use RIL_LastCallFailCauseInfo.
 static int responseFailCause(Parcel &p, void *response, size_t responselen) {
+    int numInts;
+
     if (response == NULL && responselen != 0) {
         RLOGE("invalid response: NULL");
         return RIL_ERRNO_INVALID_RESPONSE;
@@ -3116,11 +3146,25 @@ static int responseCdmaInformationRecords(Parcel &p,
 }
 
 static void responseRilSignalStrengthV5(Parcel &p, RIL_SignalStrength_v10 *p_cur) {
-    p.writeInt32(p_cur->GW_SignalStrength.signalStrength);
+    int gsmSignalStrength;
+    int cdmaDbm;
+    int evdoDbm;
+
+    gsmSignalStrength = p_cur->GW_SignalStrength.signalStrength & 0xFF;
+
+        if (gsmSignalStrength < 0 ||
+                (gsmSignalStrength > 31 && p_cur->GW_SignalStrength.signalStrength != 99)) {
+            gsmSignalStrength = p_cur->CDMA_SignalStrength.dbm;
+        }
+
+        cdmaDbm = p_cur->CDMA_SignalStrength.dbm;
+        evdoDbm = p_cur->EVDO_SignalStrength.dbm;
+
+    p.writeInt32(gsmSignalStrength);
     p.writeInt32(p_cur->GW_SignalStrength.bitErrorRate);
-    p.writeInt32(p_cur->CDMA_SignalStrength.dbm);
+    p.writeInt32(cdmaDbm);
     p.writeInt32(p_cur->CDMA_SignalStrength.ecio);
-    p.writeInt32(p_cur->EVDO_SignalStrength.dbm);
+    p.writeInt32(evdoDbm);
     p.writeInt32(p_cur->EVDO_SignalStrength.ecio);
     p.writeInt32(p_cur->EVDO_SignalStrength.signalNoiseRatio);
 }
@@ -3217,11 +3261,11 @@ static int responseRilSignalStrength(Parcel &p,
             LTE_SS.signalStrength=%d,LTE_SS.rsrp=%d,LTE_SS.rsrq=%d,\
             LTE_SS.rssnr=%d,LTE_SS.cqi=%d,TDSCDMA_SS.rscp=%d]",
             printBuf,
-            p_cur->GW_SignalStrength.signalStrength,
+            gsmSignalStrength,
             p_cur->GW_SignalStrength.bitErrorRate,
-            p_cur->CDMA_SignalStrength.dbm,
+            cdmaDbm,
             p_cur->CDMA_SignalStrength.ecio,
-            p_cur->EVDO_SignalStrength.dbm,
+            evdoDbm,
             p_cur->EVDO_SignalStrength.ecio,
             p_cur->EVDO_SignalStrength.signalNoiseRatio,
             p_cur->LTE_SignalStrength.signalStrength,
@@ -3400,36 +3444,74 @@ static int responseCellInfoListV6(Parcel &p, void *response, size_t responselen)
     startResponse;
     int i;
     for (i = 0; i < num; i++) {
+        appendPrintBuf("%s[%d: type=%d,registered=%d,timeStampType=%d,timeStamp=%lld", printBuf, i,
+            p_cur->cellInfoType, p_cur->registered, p_cur->timeStampType, p_cur->timeStamp);
         p.writeInt32((int)p_cur->cellInfoType);
         p.writeInt32(p_cur->registered);
         p.writeInt32(p_cur->timeStampType);
         p.writeInt64(p_cur->timeStamp);
         switch(p_cur->cellInfoType) {
             case RIL_CELL_INFO_TYPE_GSM: {
+                appendPrintBuf("%s GSM id: mcc=%d,mnc=%d,lac=%d,cid=%d,", printBuf,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mcc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mnc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.lac,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.cid);
+                appendPrintBuf("%s gsmSS: ss=%d,ber=%d],", printBuf,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.signalStrength,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.bitErrorRate);
+
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.mcc);
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.mnc);
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.lac);
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.cid);
+                p.writeInt32(INT_MAX); /* skip arfcn */
+                p.writeInt32(INT_MAX); /* skip bsic */
                 p.writeInt32(p_cur->CellInfo.gsm.signalStrengthGsm.signalStrength);
                 p.writeInt32(p_cur->CellInfo.gsm.signalStrengthGsm.bitErrorRate);
                 break;
             }
             case RIL_CELL_INFO_TYPE_WCDMA: {
+                appendPrintBuf("%s WCDMA id: mcc=%d,mnc=%d,lac=%d,cid=%d,psc=%d,", printBuf,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mcc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mnc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.lac,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.cid,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.psc);
+                appendPrintBuf("%s wcdmaSS: ss=%d,ber=%d],", printBuf,
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.signalStrength,
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.bitErrorRate);
+
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.mcc);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.mnc);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.lac);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.cid);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.psc);
+                p.writeInt32(INT_MAX); /* skip uarfcn */
                 p.writeInt32(p_cur->CellInfo.wcdma.signalStrengthWcdma.signalStrength);
                 p.writeInt32(p_cur->CellInfo.wcdma.signalStrengthWcdma.bitErrorRate);
                 break;
             }
             case RIL_CELL_INFO_TYPE_CDMA: {
+                appendPrintBuf("%s CDMA id: nId=%d,sId=%d,bsId=%d,long=%d,lat=%d", printBuf,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.networkId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.systemId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.basestationId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.longitude,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.latitude);
+
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.networkId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.systemId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.basestationId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.longitude);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.latitude);
+
+                appendPrintBuf("%s cdmaSS: dbm=%d ecio=%d evdoSS: dbm=%d,ecio=%d,snr=%d", printBuf,
+                    p_cur->CellInfo.cdma.signalStrengthCdma.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthCdma.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.signalNoiseRatio);
 
                 p.writeInt32(p_cur->CellInfo.cdma.signalStrengthCdma.dbm);
                 p.writeInt32(p_cur->CellInfo.cdma.signalStrengthCdma.ecio);
@@ -3439,12 +3521,27 @@ static int responseCellInfoListV6(Parcel &p, void *response, size_t responselen)
                 break;
             }
             case RIL_CELL_INFO_TYPE_LTE: {
+                appendPrintBuf("%s LTE id: mcc=%d,mnc=%d,ci=%d,pci=%d,tac=%d", printBuf,
+                    p_cur->CellInfo.lte.cellIdentityLte.mcc,
+                    p_cur->CellInfo.lte.cellIdentityLte.mnc,
+                    p_cur->CellInfo.lte.cellIdentityLte.ci,
+                    p_cur->CellInfo.lte.cellIdentityLte.pci,
+                    p_cur->CellInfo.lte.cellIdentityLte.tac);
+
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.mcc);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.mnc);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.ci);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.pci);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.tac);
+                p.writeInt32(INT_MAX); /* skip earfcn */
 
+                appendPrintBuf("%s lteSS: ss=%d,rsrp=%d,rsrq=%d,rssnr=%d,cqi=%d,ta=%d", printBuf,
+                    p_cur->CellInfo.lte.signalStrengthLte.signalStrength,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrp,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrq,
+                    p_cur->CellInfo.lte.signalStrengthLte.rssnr,
+                    p_cur->CellInfo.lte.signalStrengthLte.cqi,
+                    p_cur->CellInfo.lte.signalStrengthLte.timingAdvance);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.signalStrength);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.rsrp);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.rsrq);
@@ -3454,6 +3551,15 @@ static int responseCellInfoListV6(Parcel &p, void *response, size_t responselen)
                 break;
             }
             case RIL_CELL_INFO_TYPE_TD_SCDMA: {
+                appendPrintBuf("%s TDSCDMA id: mcc=%d,mnc=%d,lac=%d,cid=%d,cpid=%d,", printBuf,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mcc,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mnc,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.lac,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.cid,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.cpid);
+                appendPrintBuf("%s tdscdmaSS: rscp=%d],", printBuf,
+                    p_cur->CellInfo.tdscdma.signalStrengthTdscdma.rscp);
+
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mcc);
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mnc);
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.lac);
@@ -3490,12 +3596,39 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
     startResponse;
     int i;
     for (i = 0; i < num; i++) {
+        appendPrintBuf("%s[%d: type=%d,registered=%d,timeStampType=%d,timeStamp=%lld", printBuf, i,
+            p_cur->cellInfoType, p_cur->registered, p_cur->timeStampType, p_cur->timeStamp);
+        RLOGE("[%d: type=%d,registered=%d,timeStampType=%d,timeStamp=%lld", i,
+            p_cur->cellInfoType, p_cur->registered, p_cur->timeStampType, p_cur->timeStamp);
         p.writeInt32((int)p_cur->cellInfoType);
         p.writeInt32(p_cur->registered);
         p.writeInt32(p_cur->timeStampType);
         p.writeInt64(p_cur->timeStamp);
         switch(p_cur->cellInfoType) {
             case RIL_CELL_INFO_TYPE_GSM: {
+                appendPrintBuf("%s GSM id: mcc=%d,mnc=%d,lac=%d,cid=%d,arfcn=%d,bsic=%x", printBuf,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mcc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mnc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.lac,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.cid,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.arfcn,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.bsic);
+                RLOGE("GSM id: mcc=%d,mnc=%d,lac=%d,cid=%d,arfcn=%d,bsic=%x",
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mcc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.mnc,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.lac,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.cid,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.arfcn,
+                    p_cur->CellInfo.gsm.cellIdentityGsm.bsic);
+                RLOGE("gsmSS: ss=%d,ber=%d, ta=%d],",
+                    p_cur->CellInfo.gsm.signalStrengthGsm.signalStrength,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.bitErrorRate,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.timingAdvance);
+                appendPrintBuf("%s gsmSS: ss=%d,ber=%d, ta=%d],", printBuf,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.signalStrength,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.bitErrorRate,
+                    p_cur->CellInfo.gsm.signalStrengthGsm.timingAdvance);
+
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.mcc);
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.mnc);
                 p.writeInt32(p_cur->CellInfo.gsm.cellIdentityGsm.lac);
@@ -3508,6 +3641,27 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
                 break;
             }
             case RIL_CELL_INFO_TYPE_WCDMA: {
+                RLOGE("WCDMA id: mcc=%d,mnc=%d,lac=%d,cid=%d,psc=%d,uarfcn=%d",
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mcc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mnc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.lac,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.cid,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.psc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.uarfcn);
+                RLOGE("wcdmaSS: ss=%d,ber=%d],",
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.signalStrength,
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.bitErrorRate);
+                appendPrintBuf("%s WCDMA id: mcc=%d,mnc=%d,lac=%d,cid=%d,psc=%d,uarfcn=%d", printBuf,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mcc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.mnc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.lac,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.cid,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.psc,
+                    p_cur->CellInfo.wcdma.cellIdentityWcdma.uarfcn);
+                appendPrintBuf("%s wcdmaSS: ss=%d,ber=%d],", printBuf,
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.signalStrength,
+                    p_cur->CellInfo.wcdma.signalStrengthWcdma.bitErrorRate);
+
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.mcc);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.mnc);
                 p.writeInt32(p_cur->CellInfo.wcdma.cellIdentityWcdma.lac);
@@ -3519,11 +3673,39 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
                 break;
             }
             case RIL_CELL_INFO_TYPE_CDMA: {
+                RLOGE("CDMA id: nId=%d,sId=%d,bsId=%d,long=%d,lat=%d",
+                    p_cur->CellInfo.cdma.cellIdentityCdma.networkId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.systemId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.basestationId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.longitude,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.latitude);
+
+                appendPrintBuf("%s CDMA id: nId=%d,sId=%d,bsId=%d,long=%d,lat=%d", printBuf,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.networkId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.systemId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.basestationId,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.longitude,
+                    p_cur->CellInfo.cdma.cellIdentityCdma.latitude);
+
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.networkId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.systemId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.basestationId);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.longitude);
                 p.writeInt32(p_cur->CellInfo.cdma.cellIdentityCdma.latitude);
+
+                RLOGE("cdmaSS: dbm=%d ecio=%d evdoSS: dbm=%d,ecio=%d,snr=%d",
+                    p_cur->CellInfo.cdma.signalStrengthCdma.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthCdma.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.signalNoiseRatio);
+
+                appendPrintBuf("%s cdmaSS: dbm=%d ecio=%d evdoSS: dbm=%d,ecio=%d,snr=%d", printBuf,
+                    p_cur->CellInfo.cdma.signalStrengthCdma.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthCdma.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.dbm,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.ecio,
+                    p_cur->CellInfo.cdma.signalStrengthEvdo.signalNoiseRatio);
 
                 p.writeInt32(p_cur->CellInfo.cdma.signalStrengthCdma.dbm);
                 p.writeInt32(p_cur->CellInfo.cdma.signalStrengthCdma.ecio);
@@ -3533,6 +3715,22 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
                 break;
             }
             case RIL_CELL_INFO_TYPE_LTE: {
+                RLOGE("LTE id: mcc=%d,mnc=%d,ci=%d,pci=%d,tac=%d,earfcn=%d",
+                    p_cur->CellInfo.lte.cellIdentityLte.mcc,
+                    p_cur->CellInfo.lte.cellIdentityLte.mnc,
+                    p_cur->CellInfo.lte.cellIdentityLte.ci,
+                    p_cur->CellInfo.lte.cellIdentityLte.pci,
+                    p_cur->CellInfo.lte.cellIdentityLte.tac,
+                    p_cur->CellInfo.lte.cellIdentityLte.earfcn);
+
+                appendPrintBuf("%s LTE id: mcc=%d,mnc=%d,ci=%d,pci=%d,tac=%d,earfcn=%d", printBuf,
+                    p_cur->CellInfo.lte.cellIdentityLte.mcc,
+                    p_cur->CellInfo.lte.cellIdentityLte.mnc,
+                    p_cur->CellInfo.lte.cellIdentityLte.ci,
+                    p_cur->CellInfo.lte.cellIdentityLte.pci,
+                    p_cur->CellInfo.lte.cellIdentityLte.tac,
+                    p_cur->CellInfo.lte.cellIdentityLte.earfcn);
+
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.mcc);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.mnc);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.ci);
@@ -3540,6 +3738,20 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.tac);
                 p.writeInt32(p_cur->CellInfo.lte.cellIdentityLte.earfcn);
 
+                RLOGE("lteSS: ss=%d,rsrp=%d,rsrq=%d,rssnr=%d,cqi=%d,ta=%d",
+                    p_cur->CellInfo.lte.signalStrengthLte.signalStrength,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrp,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrq,
+                    p_cur->CellInfo.lte.signalStrengthLte.rssnr,
+                    p_cur->CellInfo.lte.signalStrengthLte.cqi,
+                    p_cur->CellInfo.lte.signalStrengthLte.timingAdvance);
+                appendPrintBuf("%s lteSS: ss=%d,rsrp=%d,rsrq=%d,rssnr=%d,cqi=%d,ta=%d", printBuf,
+                    p_cur->CellInfo.lte.signalStrengthLte.signalStrength,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrp,
+                    p_cur->CellInfo.lte.signalStrengthLte.rsrq,
+                    p_cur->CellInfo.lte.signalStrengthLte.rssnr,
+                    p_cur->CellInfo.lte.signalStrengthLte.cqi,
+                    p_cur->CellInfo.lte.signalStrengthLte.timingAdvance);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.signalStrength);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.rsrp);
                 p.writeInt32(p_cur->CellInfo.lte.signalStrengthLte.rsrq);
@@ -3549,6 +3761,15 @@ static int responseCellInfoListV12(Parcel &p, void *response, size_t responselen
                 break;
             }
             case RIL_CELL_INFO_TYPE_TD_SCDMA: {
+                appendPrintBuf("%s TDSCDMA id: mcc=%d,mnc=%d,lac=%d,cid=%d,cpid=%d,", printBuf,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mcc,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mnc,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.lac,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.cid,
+                    p_cur->CellInfo.tdscdma.cellIdentityTdscdma.cpid);
+                appendPrintBuf("%s tdscdmaSS: rscp=%d],", printBuf,
+                    p_cur->CellInfo.tdscdma.signalStrengthTdscdma.rscp);
+
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mcc);
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.mnc);
                 p.writeInt32(p_cur->CellInfo.tdscdma.cellIdentityTdscdma.lac);
@@ -3804,6 +4025,7 @@ static void responseSimStatusV5(Parcel &p, void *response) {
     p.writeInt32(p_cur->universal_pin_state);
     p.writeInt32(p_cur->gsm_umts_subscription_app_index);
     p.writeInt32(p_cur->cdma_subscription_app_index);
+    p.writeInt32(-1);
 
     sendSimStatusAppInfo(p, p_cur->num_applications, p_cur->applications);
 }
@@ -4839,8 +5061,17 @@ RIL_register (const RIL_RadioFunctions *callbacks) {
         assert(i == s_commands[i].requestNumber);
     }
 
+    for (int i = 0; i < (int)NUM_ELEMS(s_commands_v); i++) {
+        assert(i + RIL_VENDOR_COMMANDS_OFFSET == s_commands[i].requestNumber);
+    }
+
     for (int i = 0; i < (int)NUM_ELEMS(s_unsolResponses); i++) {
         assert(i + RIL_UNSOL_RESPONSE_BASE
+                == s_unsolResponses[i].requestNumber);
+    }
+
+    for (int i = 0; i < (int)NUM_ELEMS(s_unsolResponses_v); i++) {
+        assert(i + RIL_UNSOL_RESPONSE_BASE + RIL_VENDOR_COMMANDS_OFFSET
                 == s_unsolResponses[i].requestNumber);
     }
 
@@ -5332,6 +5563,8 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     bool shouldScheduleTimeout = false;
     RIL_RadioState newState;
     RIL_SOCKET_ID soc_id = RIL_SOCKET_1;
+    UnsolResponseInfo *pRI = NULL;
+    int32_t pRI_elements;
 
 #if defined(ANDROID_MULTI_SIM)
     soc_id = socket_id;
@@ -5345,9 +5578,40 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     }
 
     unsolResponseIndex = unsolResponse - RIL_UNSOL_RESPONSE_BASE;
+    pRI = s_unsolResponses;
+    pRI_elements = (int32_t)NUM_ELEMS(s_unsolResponses);
 
-    if ((unsolResponseIndex < 0)
-        || (unsolResponseIndex >= (int32_t)NUM_ELEMS(s_unsolResponses))) {
+    /* Hack to include Samsung responses */
+    if (unsolResponse > RIL_VENDOR_COMMANDS_OFFSET + RIL_UNSOL_RESPONSE_BASE) {
+        pRI = s_unsolResponses_v;
+        pRI_elements = (int32_t)NUM_ELEMS(s_unsolResponses_v);
+
+        /*
+         * Some of the vendor response codes cannot be found by calculating their index anymore,
+         * because they have an even higher offset and are not ordered in the array.
+         * Example: RIL_UNSOL_SNDMGR_WB_AMR_REPORT = 20017, but it's at index 33 in the vendor
+         * response array.
+         * Thus, look through all the vendor URIs (Unsol Response Info) and pick the correct index.
+         * This has a cost of O(N).
+         */
+        int pRI_index;
+        for (pRI_index = 0; pRI_index < pRI_elements; pRI_index++) {
+            if (pRI[pRI_index].requestNumber == unsolResponse) {
+                unsolResponseIndex = pRI_index;
+            }
+        }
+
+        RLOGD("SAMSUNG: unsolResponse=%d, unsolResponseIndex=%d", unsolResponse, unsolResponseIndex);
+    }
+
+    if (unsolResponseIndex >= 0 && unsolResponseIndex < pRI_elements) {
+        pRI = &pRI[unsolResponseIndex];
+    } else {
+        RLOGE("could not map unsolResponse=%d to %s response array (index=%d)", unsolResponse,
+                pRI == s_unsolResponses ? "AOSP" : "Samsung", unsolResponseIndex);
+    }
+
+    if (pRI == NULL || pRI->responseFunction == NULL) {
         RLOGE("unsupported unsolicited response code %d", unsolResponse);
         return;
     }
@@ -5355,7 +5619,7 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     // Grab a wake lock if needed for this reponse,
     // as we exit we'll either release it immediately
     // or set a timer to release it later.
-    switch (s_unsolResponses[unsolResponseIndex].wakeType) {
+    switch (pRI->wakeType) {
         case WAKE_PARTIAL:
             grabPartialWakeLock();
             shouldScheduleTimeout = true;
@@ -5380,15 +5644,15 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
 
     Parcel p;
     if (s_callbacks.version >= 13
-                && s_unsolResponses[unsolResponseIndex].wakeType == WAKE_PARTIAL) {
+                && pRI->wakeType == WAKE_PARTIAL) {
         p.writeInt32 (RESPONSE_UNSOLICITED_ACK_EXP);
     } else {
         p.writeInt32 (RESPONSE_UNSOLICITED);
     }
     p.writeInt32 (unsolResponse);
 
-    ret = s_unsolResponses[unsolResponseIndex]
-                .responseFunction(p, const_cast<void*>(data), datalen);
+    ret = pRI->responseFunction(p, const_cast<void*>(data), datalen);
+
     if (ret != 0) {
         // Problem with the response. Don't continue;
         goto error_exit;
@@ -5813,6 +6077,8 @@ requestToString(int request) {
         case RIL_UNSOL_SRVCC_STATE_NOTIFY: return "UNSOL_SRVCC_STATE_NOTIFY";
         case RIL_UNSOL_HARDWARE_CONFIG_CHANGED: return "HARDWARE_CONFIG_CHANGED";
         case RIL_UNSOL_DC_RT_INFO_CHANGED: return "UNSOL_DC_RT_INFO_CHANGED";
+        case RIL_UNSOL_ON_SS: return "UNSOL_ON_SS";
+        case RIL_UNSOL_STK_CC_ALPHA_NOTIFY: return "UNSOL_STK_CC_ALPHA_NOTIFY";
         case RIL_REQUEST_SHUTDOWN: return "SHUTDOWN";
         case RIL_UNSOL_RADIO_CAPABILITY: return "RIL_UNSOL_RADIO_CAPABILITY";
         case RIL_RESPONSE_ACKNOWLEDGEMENT: return "RIL_RESPONSE_ACKNOWLEDGEMENT";
