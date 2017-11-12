@@ -168,6 +168,9 @@ extern "C" const char * rilSocketIdToString(RIL_SOCKET_ID socket_id);
 
 extern "C"
 char rild[MAX_SOCKET_NAME_LENGTH] = SOCKET_NAME_RIL;
+
+#define RIL_VENDOR_COMMANDS_OFFSET 10000
+
 /*******************************************************************/
 
 RIL_RadioFunctions s_callbacks = {0, NULL, NULL, NULL, NULL, NULL};
@@ -362,6 +365,14 @@ static UnsolResponseInfo s_unsolResponses[] = {
 #include "ril_unsol_commands.h"
 };
 
+static CommandInfo s_commands_v[] = {
+#include <telephony/ril_commands_vendor.h>
+};
+
+static UnsolResponseInfo s_unsolResponses_v[] = {
+#include <telephony/ril_unsol_commands_vendor.h>
+};
+
 /* For older RILs that do not support new commands RIL_REQUEST_VOICE_RADIO_TECH and
    RIL_UNSOL_VOICE_RADIO_TECH_CHANGED messages, decode the voice radio tech from
    radio state message and store it. Every time there is a change in Radio State
@@ -476,6 +487,11 @@ issueLocalRequest(int request, void *data, int len, RIL_SOCKET_ID socket_id) {
     pRI->pCI = &(s_commands[request]);
     pRI->socket_id = socket_id;
 
+    /* Hack to include Samsung requests */
+    if (request > RIL_VENDOR_COMMANDS_OFFSET) {
+        pRI->pCI = &(s_commands_v[request - RIL_VENDOR_COMMANDS_OFFSET]);
+    }
+
     ret = pthread_mutex_lock(pendingRequestsMutexHook);
     assert (ret == 0);
 
@@ -536,6 +552,18 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
         return 0;
     }
 
+    CommandInfo *pCI = NULL;
+    if (request > RIL_VENDOR_COMMANDS_OFFSET) {
+        int index = request - RIL_VENDOR_COMMANDS_OFFSET;
+        RLOGD("processCommandBuffer: samsung request=%d, index=%d",
+                request, index);
+        if (index < (int32_t)NUM_ELEMS(s_commands_v))
+            pCI = &(s_commands_v[index]);
+    } else {
+        if (request < (int32_t)NUM_ELEMS(s_commands))
+            pCI = &(s_commands[request]);
+    }
+
     // Received an Ack for the previous result sent to RIL.java,
     // so release wakelock and exit
     if (request == RIL_RESPONSE_ACKNOWLEDGEMENT) {
@@ -562,7 +590,7 @@ processCommandBuffer(void *buffer, size_t buflen, RIL_SOCKET_ID socket_id) {
     }
 
     pRI->token = token;
-    pRI->pCI = &(s_commands[request]);
+    pRI->pCI = pCI;
     pRI->socket_id = socket_id;
 
     ret = pthread_mutex_lock(pendingRequestsMutexHook);
@@ -4839,8 +4867,17 @@ RIL_register (const RIL_RadioFunctions *callbacks) {
         assert(i == s_commands[i].requestNumber);
     }
 
+    for (int i = 0; i < (int)NUM_ELEMS(s_commands_v); i++) {
+        assert(i + RIL_VENDOR_COMMANDS_OFFSET == s_commands[i].requestNumber);
+    }
+
     for (int i = 0; i < (int)NUM_ELEMS(s_unsolResponses); i++) {
         assert(i + RIL_UNSOL_RESPONSE_BASE
+                == s_unsolResponses[i].requestNumber);
+    }
+
+    for (int i = 0; i < (int)NUM_ELEMS(s_unsolResponses_v); i++) {
+        assert(i + RIL_UNSOL_RESPONSE_BASE + RIL_VENDOR_COMMANDS_OFFSET
                 == s_unsolResponses[i].requestNumber);
     }
 
@@ -5332,6 +5369,8 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     bool shouldScheduleTimeout = false;
     RIL_RadioState newState;
     RIL_SOCKET_ID soc_id = RIL_SOCKET_1;
+    UnsolResponseInfo *pRI = NULL;
+    int32_t pRI_elements;
 
 #if defined(ANDROID_MULTI_SIM)
     soc_id = socket_id;
@@ -5345,9 +5384,40 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     }
 
     unsolResponseIndex = unsolResponse - RIL_UNSOL_RESPONSE_BASE;
+    pRI = s_unsolResponses;
+    pRI_elements = (int32_t)NUM_ELEMS(s_unsolResponses);
 
-    if ((unsolResponseIndex < 0)
-        || (unsolResponseIndex >= (int32_t)NUM_ELEMS(s_unsolResponses))) {
+    /* Hack to include Samsung responses */
+    if (unsolResponse > RIL_VENDOR_COMMANDS_OFFSET + RIL_UNSOL_RESPONSE_BASE) {
+        pRI = s_unsolResponses_v;
+        pRI_elements = (int32_t)NUM_ELEMS(s_unsolResponses_v);
+
+        /*
+         * Some of the vendor response codes cannot be found by calculating their index anymore,
+         * because they have an even higher offset and are not ordered in the array.
+         * Example: RIL_UNSOL_SNDMGR_WB_AMR_REPORT = 20017, but it's at index 33 in the vendor
+         * response array.
+         * Thus, look through all the vendor URIs (Unsol Response Info) and pick the correct index.
+         * This has a cost of O(N).
+         */
+        int pRI_index;
+        for (pRI_index = 0; pRI_index < pRI_elements; pRI_index++) {
+            if (pRI[pRI_index].requestNumber == unsolResponse) {
+                unsolResponseIndex = pRI_index;
+            }
+        }
+
+        RLOGD("SAMSUNG: unsolResponse=%d, unsolResponseIndex=%d", unsolResponse, unsolResponseIndex);
+    }
+
+    if (unsolResponseIndex >= 0 && unsolResponseIndex < pRI_elements) {
+        pRI = &pRI[unsolResponseIndex];
+    } else {
+        RLOGE("could not map unsolResponse=%d to %s response array (index=%d)", unsolResponse,
+                pRI == s_unsolResponses ? "AOSP" : "Samsung", unsolResponseIndex);
+    }
+
+    if (pRI == NULL || pRI->responseFunction == NULL) {
         RLOGE("unsupported unsolicited response code %d", unsolResponse);
         return;
     }
@@ -5355,7 +5425,7 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
     // Grab a wake lock if needed for this reponse,
     // as we exit we'll either release it immediately
     // or set a timer to release it later.
-    switch (s_unsolResponses[unsolResponseIndex].wakeType) {
+    switch (pRI->wakeType) {
         case WAKE_PARTIAL:
             grabPartialWakeLock();
             shouldScheduleTimeout = true;
@@ -5380,15 +5450,15 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
 
     Parcel p;
     if (s_callbacks.version >= 13
-                && s_unsolResponses[unsolResponseIndex].wakeType == WAKE_PARTIAL) {
+                && pRI->wakeType == WAKE_PARTIAL) {
         p.writeInt32 (RESPONSE_UNSOLICITED_ACK_EXP);
     } else {
         p.writeInt32 (RESPONSE_UNSOLICITED);
     }
     p.writeInt32 (unsolResponse);
 
-    ret = s_unsolResponses[unsolResponseIndex]
-                .responseFunction(p, const_cast<void*>(data), datalen);
+    ret = pRI->responseFunction(p, const_cast<void*>(data), datalen);
+
     if (ret != 0) {
         // Problem with the response. Don't continue;
         goto error_exit;
