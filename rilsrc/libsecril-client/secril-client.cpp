@@ -1546,8 +1546,9 @@ static int blockingWrite(int fd, const void *buffer, size_t len) {
         }
         else {
             RLOGE ("RIL Response: unexpected error on write errno:%d", errno);
+            printf("RIL Response: unexpected error on write errno:%d\n", errno);
             close(fd);
-            return -errno;
+            return -1;
         }
     }
 
